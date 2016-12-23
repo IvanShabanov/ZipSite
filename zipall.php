@@ -1,4 +1,13 @@
 <?php
+/**
+ * MySQL and Files archiver
+ *
+ * @author     Ivan Shabanov (https://www.facebook.com/ivan.shabanov.98)
+ * @copyright  Copyright (c) 2016 Ivan Shabanov
+ * @license    New BSD License
+ * @version    1.0
+ */
+
 echo '<p>MySQL and Files archiver</p>';
 
 function microtime_float()
@@ -8,186 +17,217 @@ function microtime_float()
 }
 
 
-      // класс для дампа базы данных mysql
-      class MySQLDump {
-      
-      
-          function dumpDatabase($database,$nodata = false,$nostruct = false, $filename = '') {
-              // Connect to database
-              $db = @mysql_select_db($database);
-      
-              if (!empty($db)) {
-      
-                  // Get all table names from database
-                  $c = 0;
-                  $result = mysql_list_tables($database);
-                  for($x = 0; $x < mysql_num_rows($result); $x++) {
-                      $table = mysql_tablename($result, $x);
-                      if (!empty($table)) {
-                          $arr_tables[$c] = mysql_tablename($result, $x);
-                          $c++;
-                      }
-                  }
-                  // List tables
-                  $dump = '';
-                  
-                 
-                  for ($y = 0; $y < count($arr_tables); $y++){
-      
-                      // DB Table name
-                      $table = $arr_tables[$y];
-                      if($nostruct == false){
-      
-                          // Structure Header
-                          $structure .= "-- ------------------------------------------------ \n";
-                          $structure .= "-- Table structure for table `{$table}` started >>> \n";
-      
-                          // Dump Structure
-                          $structure .= "DROP TABLE IF EXISTS `{$table}`; \n";
-                          $structure .= "CREATE TABLE `{$table}` (\n";
-                          $result = mysql_db_query($database, "SHOW FIELDS FROM `{$table}`");
-                          
-                          while($row = mysql_fetch_object($result)) {
-                              $structure .= "  `{$row->Field}` {$row->Type}";
-                              if($row->Default != 'CURRENT_TIMESTAMP'){
-                              	$structure .= (!empty($row->Default)) ? " DEFAULT '{$row->Default}'" : false;
-                              }else{
-                              	$structure .= (!empty($row->Default)) ? " DEFAULT {$row->Default}" : false;
-                              }
-                              $structure .= ($row->Null != "YES") ? " NOT NULL" : false;
-                              $structure .= (!empty($row->Extra)) ? " {$row->Extra}" : false;
-                              $structure .= ",\n";
-      
-                          }
-      
-                          $structure = ereg_replace(",\n$", "", $structure);
-      
-                          // Save all Column Indexes in array
-                          unset($index);
-                          $result = mysql_db_query($database, "SHOW KEYS FROM `{$table}`");
-                          while($row = mysql_fetch_object($result)) {
-      
-                              if (($row->Key_name == 'PRIMARY') AND ($row->Index_type == 'BTREE')) {
-                                  $index['PRIMARY'][$row->Key_name] = $row->Column_name;
-                              }
-      
-                              if (($row->Key_name != 'PRIMARY') AND ($row->Non_unique == '0') AND ($row->Index_type == 'BTREE')) {
-                                  $index['UNIQUE'][$row->Key_name] = $row->Column_name;
-                              }
-      
-                              if (($row->Key_name != 'PRIMARY') AND ($row->Non_unique == '1') AND ($row->Index_type == 'BTREE')) {
-                                  $index['INDEX'][$row->Key_name] = $row->Column_name;
-                              }
-      
-                              if (($row->Key_name != 'PRIMARY') AND ($row->Non_unique == '1') AND ($row->Index_type == 'FULLTEXT')) {
-                                  $index['FULLTEXT'][$row->Key_name] = $row->Column_name;
-                              }
-      
-                          }
-                          
-      
-                          // Return all Column Indexes of array
-                          if (is_array($index)) {
-                              foreach ($index as $xy => $columns) {
-      
-                                  $structure .= ",\n";
-      
-                                  $c = 0;
-                                  foreach ($columns as $column_key => $column_name) {
-      
-                                      $c++;
-      
-                                      $structure .= ($xy == "PRIMARY") ? "  PRIMARY KEY  (`{$column_name}`)" : false;
-                                      $structure .= ($xy == "UNIQUE") ? "  UNIQUE KEY `{$column_key}` (`{$column_name}`)" : false;
-                                      $structure .= ($xy == "INDEX") ? "  KEY `{$column_key}` (`{$column_name}`)" : false;
-                                      $structure .= ($xy == "FULLTEXT") ? "  FULLTEXT `{$column_key}` (`{$column_name}`)" : false;
-      
-                                      $structure .= ($c < (count($index[$xy]))) ? ",\n" : false;
-      
-                                  }
-      
-                              }
-      
-                          }
-      
-                          $structure .= "\n);\n\n";
-                          $structure .= "-- Table structure for table `{$table}` finished <<< \n";
-                          $structure .= "-- ------------------------------------------------- \n";
-      
-                      }
-      
-                      // Dump data
-                      if($nodata == false) {
-      
-                      $structure .= " \n\n";
-                      if ($filename != '') {
-                        file_put_contents($filename ,$structure, FILE_APPEND); 
-                        unset($structure);
-                      }
-                          $result     = mysql_query("SELECT * FROM `$table`");
-                          $num_rows   = mysql_num_rows($result);
-                          $num_fields = mysql_num_fields($result);
-      
-      	                $data .= "-- -------------------------------------------- \n";
-      	                $data .= "-- Dumping data for table `$table` started >>> \n";
+/**
+ * MySQL database dump.
+ *
+ * @author     David Grudl (http://davidgrudl.com)
+ * @copyright  Copyright (c) 2008 David Grudl
+ * @license    New BSD License
+ * @version    1.0
+ */
+class MySQLDump
+{
+	const MAX_SQL_SIZE = 1e6;
 
-                      if ($filename != '') {
-                        file_put_contents($filename ,$data, FILE_APPEND); 
-                        unset($data);
-                      }
+	const NONE = 0;
+	const DROP = 1;
+	const CREATE = 2;
+	const DATA = 4;
+	const TRIGGERS = 8;
+	const ALL = 15; // DROP | CREATE | DATA | TRIGGERS
 
-      
-      		            for ($i = 0; $i < $num_rows; $i++) {
-      
-                              $row = mysql_fetch_object($result);
-                              $data .= "INSERT INTO `$table` (";
-      
-                              // Field names
-                              for ($x = 0; $x < $num_fields; $x++) {
-                                  $field_name = mysql_field_name($result, $x);
-                                  $data .= "`{$field_name}`";
-                                  $data .= ($x < ($num_fields - 1)) ? ", " : false;
-                              }
-                              $data .= ") VALUES (";
-                              // Values
-                              for ($x = 0; $x < $num_fields; $x++) {
-                                  $field_name = mysql_field_name($result, $x);
-                                  $data .= "'" . str_replace('\"', '"', mysql_real_escape_string($row->$field_name)) . "'";
-                                  $data .= ($x < ($num_fields - 1)) ? ", " : false;
-                              }
-                              $data.= ");\n";
-                              if ($filename != '') {
-                                file_put_contents($filename ,$data, FILE_APPEND); 
-                                unset($data);
-                              }
-                          }
-      	                $data .= "-- Dumping data for table `$table` finished <<< \n";
-      	                $data .= "-- -------------------------------------------- \n\n";
-                          
-                        $data.= "\n";
-                        if ($filename != '') {
-                          file_put_contents($filename ,$data, FILE_APPEND); 
-                          unset($data);
-                        }
-                      }
-      
-                      
-                      
-                  }
-                  $dump .= $structure . $data;
-      
-              }
-                  return $dump;
-      
-          }
-          function SaveToFile($data, $filename = 'mysqldump.sql'){
-              $path = getcwd();
-              $handle = fopen($path.'/'."$filename", 'w');
-              fwrite($handle,$data);
-              fclose($handle);
-          }
-    
-      }
+	/** @var array */
+	public $tables = array(
+		'*' => self::ALL,
+	);
+
+	/** @var mysqli */
+	private $connection;
+
+
+	/**
+	 * Connects to database.
+	 * @param  mysqli connection
+	 */
+	public function __construct(mysqli $connection, $charset = 'utf8')
+	{
+		$this->connection = $connection;
+
+		if ($connection->connect_errno) {
+			throw new Exception($connection->connect_error);
+
+		} elseif (!$connection->set_charset($charset)) { // was added in MySQL 5.0.7 and PHP 5.0.5, fixed in PHP 5.1.5)
+			throw new Exception($connection->error);
+		}
+	}
+
+
+	/**
+	 * Saves dump to the file.
+	 * @param  string filename
+	 * @return void
+	 */
+	public function save($file)
+	{
+		$handle = strcasecmp(substr($file, -3), '.gz') ? fopen($file, 'wb') : gzopen($file, 'wb');
+		if (!$handle) {
+			throw new Exception("ERROR: Cannot write file '$file'.");
+		}
+		$this->write($handle);
+	}
+
+
+	/**
+	 * Writes dump to logical file.
+	 * @param  resource
+	 * @return void
+	 */
+	public function write($handle = NULL)
+	{
+		if ($handle === NULL) {
+			$handle = fopen('php://output', 'wb');
+		} elseif (!is_resource($handle) || get_resource_type($handle) !== 'stream') {
+			throw new Exception('Argument must be stream resource.');
+		}
+
+		$tables = $views = array();
+
+		$res = $this->connection->query('SHOW FULL TABLES');
+		while ($row = $res->fetch_row()) {
+			if ($row[1] === 'VIEW') {
+				$views[] = $row[0];
+			} else {
+				$tables[] = $row[0];
+			}
+		}
+		$res->close();
+
+		$tables = array_merge($tables, $views); // views must be last
+
+		$this->connection->query('LOCK TABLES `' . implode('` READ, `', $tables) . '` READ');
+
+		$db = $this->connection->query('SELECT DATABASE()')->fetch_row();
+		fwrite($handle, "-- Created at " . date('j.n.Y G:i') . " using David Grudl MySQL Dump Utility\n"
+			. (isset($_SERVER['HTTP_HOST']) ? "-- Host: $_SERVER[HTTP_HOST]\n" : '')
+			. "-- MySQL Server: " . $this->connection->server_info . "\n"
+			. "-- Database: " . $db[0] . "\n"
+			. "\n"
+			. "SET NAMES utf8;\n"
+			. "SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\n"
+			. "SET FOREIGN_KEY_CHECKS=0;\n"
+		);
+
+		foreach ($tables as $table) {
+			$this->dumpTable($handle, $table);
+		}
+
+		fwrite($handle, "-- THE END\n");
+
+		$this->connection->query('UNLOCK TABLES');
+	}
+
+
+	/**
+	 * Dumps table to logical file.
+	 * @param  resource
+	 * @return void
+	 */
+	public function dumpTable($handle, $table)
+	{
+		$delTable = $this->delimite($table);
+		$res = $this->connection->query("SHOW CREATE TABLE $delTable");
+		$row = $res->fetch_assoc();
+		$res->close();
+
+		fwrite($handle, "-- --------------------------------------------------------\n\n");
+
+		$mode = isset($this->tables[$table]) ? $this->tables[$table] : $this->tables['*'];
+		$view = isset($row['Create View']);
+
+		if ($mode & self::DROP) {
+			fwrite($handle, 'DROP ' . ($view ? 'VIEW' : 'TABLE') . " IF EXISTS $delTable;\n\n");
+		}
+
+		if ($mode & self::CREATE) {
+			fwrite($handle, $row[$view ? 'Create View' : 'Create Table'] . ";\n\n");
+		}
+
+		if (!$view && ($mode & self::DATA)) {
+			$numeric = array();
+			$res = $this->connection->query("SHOW COLUMNS FROM $delTable");
+			$cols = array();
+			while ($row = $res->fetch_assoc()) {
+				$col = $row['Field'];
+				$cols[] = $this->delimite($col);
+				$numeric[$col] = (bool) preg_match('#^[^(]*(BYTE|COUNTER|SERIAL|INT|LONG$|CURRENCY|REAL|MONEY|FLOAT|DOUBLE|DECIMAL|NUMERIC|NUMBER)#i', $row['Type']);
+			}
+			$cols = '(' . implode(', ', $cols) . ')';
+			$res->close();
+
+
+			$size = 0;
+			$res = $this->connection->query("SELECT * FROM $delTable", MYSQLI_USE_RESULT);
+			while ($row = $res->fetch_assoc()) {
+				$s = '(';
+				foreach ($row as $key => $value) {
+					if ($value === NULL) {
+						$s .= "NULL,\t";
+					} elseif ($numeric[$key]) {
+						$s .= $value . ",\t";
+					} else {
+						$s .= "'" . $this->connection->real_escape_string($value) . "',\t";
+					}
+				}
+
+				if ($size == 0) {
+					$s = "INSERT INTO $delTable $cols VALUES\n$s";
+				} else {
+					$s = ",\n$s";
+				}
+
+				$len = strlen($s) - 1;
+				$s[$len - 1] = ')';
+				fwrite($handle, $s, $len);
+
+				$size += $len;
+				if ($size > self::MAX_SQL_SIZE) {
+					fwrite($handle, ";\n");
+					$size = 0;
+				}
+			}
+
+			$res->close();
+			if ($size) {
+				fwrite($handle, ";\n");
+			}
+			fwrite($handle, "\n");
+		}
+
+		if ($mode & self::TRIGGERS) {
+			$res = $this->connection->query("SHOW TRIGGERS LIKE '" . $this->connection->real_escape_string($table) . "'");
+			if ($res->num_rows) {
+				fwrite($handle, "DELIMITER ;;\n\n");
+				while ($row = $res->fetch_assoc()) {
+					fwrite($handle, "CREATE TRIGGER {$this->delimite($row['Trigger'])} $row[Timing] $row[Event] ON $delTable FOR EACH ROW\n$row[Statement];;\n\n");
+				}
+				fwrite($handle, "DELIMITER ;\n\n");
+			}
+			$res->close();
+		}
+
+		fwrite($handle, "\n");
+	}
+
+
+	private function delimite($s)
+	{
+		return '`' . str_replace('`', '``', $s) . '`';
+	}
+
+}
+
+  
+  
 
 
         function FileListinfile($directory, $outputfile) {
@@ -203,7 +243,6 @@ function microtime_float()
             }
           }
           closedir($handle);
-          return $CollectArray;
         }
 
       if ($_GET['archivzip'] == '') {
@@ -213,7 +252,7 @@ function microtime_float()
                  <input type="text" name="dbname" placeholder="MySQL DB name. If empty dont make MySQL Archive" title="MySQL DB name. If empty dont make MySQL Archive" value=""  style="width: 50%" /><br/>
                  <input type="text" name="dbuser" placeholder="MySQL User" title="MySQL User" value="" style="width: 50%"/><br/>
                  <input type="text" name="dbpass" placeholder="MySQL Password" title="MySQL Password" value="" style="width: 50%"/><br/>
-                 <input type="text" name="dbquery" placeholder="SET NAMES QUERY" title="SET NAMES QUERY" value="SET NAMES UTF-8" style="width: 50%"/><br/>
+                 <input type="text" name="charset" placeholder="Charset" title="Charset" value="utf8" style="width: 50%"/><br/>
                  </p>
                  <p>Files<br />
                  <input type="checkbox" name="allfiles" value="1" title="Archive all files" checked /> Archive all files</p>
@@ -221,20 +260,16 @@ function microtime_float()
                  </form>';
       } else if ($_GET['archivzip'] == 'start') {
           $filenamezip='site_'.date('Y-m-d-H-i-s').".zip";
-          if ($_POST['dbname'] != '')  {
-              $filenamesql=$_POST['dbname'].'_'.date('Y-m-d-H-i-s').".sql";
-              $db = @mysql_connect($_POST['dbhost'], $_POST['dbuser'], $_POST['dbpass']);
-              if ($_POST['dbquery'] != '') {
-                mysql_query($_POST['dbquery']);
-              }
-              $dump = new MySQLDump();
-              $dbdata =  $dump->dumpDatabase( $_POST['dbname'],false,false, $filenamesql);
-              /* $dump->SaveToFile($dbdata, $filenamesql); */
-              @mysql_close();
+          if ($_REQUEST['dbname'] != '')  {
+              $filenamesql=$_REQUEST['dbname'].'_'.date('Y-m-d-H-i-s').".sql.gz";
+              $mysqli = new mysqli($_REQUEST['dbhost'], $_REQUEST['dbuser'], $_REQUEST['dbpass'], $_REQUEST['dbname']);
+              $dump = new MySQLDump($mysqli, $_REQUEST['charset']);
+              $dump->save($filenamesql);
           };
-          if ($_POST['allfiles']== '1') {
+          if ($_REQUEST['allfiles']== '1') {
               echo '<script>location.replace("zipall.php?archivzip=files&filename='.$filenamezip.'"); </script>';
           } else {
+/*
               $filenamezip = $filenamesql.'.zip';
               $zip = new ZipArchive;
               $res = $zip->open($filenamezip, ZipArchive::CREATE);
@@ -242,6 +277,11 @@ function microtime_float()
               $zip->close();
               @unlink($filenamesql);
               echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
+*/
+
+              echo '<p><a href="'.$filenamesql.'">'.$filenamesql.'</a></p>';
+
+
           }
       } else if ($_GET['archivzip'] == 'files') {
                 $filenamezip = $_GET['filename'];
@@ -303,6 +343,7 @@ function microtime_float()
                     var idtimer = setInterval("TimeOut()", 1000);
                     </script>';
                 } else {
+                  @unlink ('filestozip.txt');
                   echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
                 }
                 
