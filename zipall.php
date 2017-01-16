@@ -1,3 +1,10 @@
+<!DOCTYPE HTML>
+<html lang="ru-RU">
+<head>
+  <title>MySQL and Files archiver</title>
+  <meta charset="UTF-8">
+</head>
+<body>
 <?php
 /**
  * MySQL and Files archiver
@@ -269,19 +276,7 @@ class MySQLDump
           if ($_REQUEST['allfiles']== '1') {
               echo '<script>location.replace("zipall.php?archivzip=files&filename='.$filenamezip.'"); </script>';
           } else {
-/*
-              $filenamezip = $filenamesql.'.zip';
-              $zip = new ZipArchive;
-              $res = $zip->open($filenamezip, ZipArchive::CREATE);
-              $zip->addFile($filenamesql);
-              $zip->close();
-              @unlink($filenamesql);
-              echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
-*/
-
               echo '<p><a href="'.$filenamesql.'">'.$filenamesql.'</a></p>';
-
-
           }
       } else if ($_GET['archivzip'] == 'files') {
                 $filenamezip = $_GET['filename'];
@@ -311,25 +306,43 @@ class MySQLDump
                 $n=$_GET['n']+0;
                 $files=file('filestozip.txt');
                 $zip = new ZipArchive;
-                $res = $zip->open($filenamezip, ZipArchive::CREATE);
-       
                 $curtime=microtime_float();
                 $runtime=$curtime-$starttime ;
                 $curfiles = 0;
-                while (($runtime < 5) and ($n < count($files)) and ($curfiles < 1000)) {
+                $cursize = 0;
+                $stop = false;
+                if (filesize($filenamezip) > 100 * 1024 * 1024) {
+                  $filenamezip = str_replace('.zip', '_.zip', $filenamezip);
+                }
+                $zip->open($filenamezip, ZipArchive::CREATE);
+                while (!$stop) {
                   $files[$n]= rtrim(substr($files[$n],2));
                   $zip->addFile($files[$n]);
-                  $curtime=microtime_float();
-                  $runtime=$curtime-$starttime ;
-                  $n++;
+                  $cursize += filesize($files[$n]);
+                  $n ++;
                   $curfiles ++;
+                  $curtime=microtime_float();
+                  $runtime=$curtime-$starttime;
+                  if ($runtime > 10) { $stop = true; }
+                  if ($curfiles > 1000) { $stop = true; }
+                  if ($cursize > 10 * 1024 * 1024) { $stop = true; }
+                  if ($n >= count($files)) { $stop = true; }
                 }
-                echo  'Current session worktime '.$runtime.'sec. Archived '.$curfiles.' files. Last file is '.$n.'/'.count($files).' '.$files[$n - 1].'<br />';
                 $zip->close();
+                $curtime=microtime_float();
+                $runtime=$curtime-$starttime ;
+                echo '<div style="width: 100%; background: #ddd; min-height: 70px; position: relative;">';
+                echo '<div style="width: '.($n / count($files) * 100).'%; height: 100%; background: #f55; position: absolute; top: 0px; left: 0px;">';
+                echo '</div>';
+                echo '<div style="width: 100%; height: 100%; background: none; position: absolute; top: 0px; left: 0px;">';
+                echo  'Current session worktime '.$runtime.'sec. Archived '.$curfiles.' files. Last file is '.$n.'/'.count($files).' '.$files[$n - 1].'';
+                echo '</div>';
+                echo '</div>';
+
                 if ($n < count($files)) {
                     $were = 'zipall.php?archivzip=go&filename='.$filenamezip.'&n='.$n;
-                    echo 'Wait <span id="counter">10</span> second<br />';
-                    echo '<p><a href="'.$were.'">I dont want wait. GO GO GO.</a></p>';
+                    echo '<div>Wait <span id="counter">10</span> second<br />';
+                    echo '<p><a href="'.$were.'">I dont want wait. GO GO GO.</a></p></div>';
                     echo '<script type="text/javascript">
                     function TimeOut () {
                     var timec = parseInt(document.getElementById("counter").innerHTML, 10);
@@ -344,9 +357,17 @@ class MySQLDump
                     </script>';
                 } else {
                   @unlink ('filestozip.txt');
+                  @unlink (__FILE__);                  
+                  
                   echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
+                  while (strpos($filenamezip , '_.zip') > 0) {
+                   $filenamezip = str_replace('_.zip','.zip', $filenamezip);
+                   echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
+                  }
                 }
                 
       }
 
 ?>
+</body>
+</html>
