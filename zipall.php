@@ -252,14 +252,94 @@ class MySQLDump
           closedir($handle);
         }
 
+      function GetCMS() {
+        $result = array('CMS' => 'Unkonwn',
+                          'dbhost' => 'localhost',
+                          'dbuser' => '',
+                          'dbpass' => '',
+                          'dbname' => '',
+                          'charset' => 'utf8'
+                          );
+        if (file_exists($_SERVER['DOCUMENT_ROOT'].'/bitrix/php_interface/dbconn.php')) {
+          include($_SERVER['DOCUMENT_ROOT'].'/bitrix/php_interface/dbconn.php');
+          $result = array('CMS' => 'BITRIX',
+                          'dbhost' => $DBHost,
+                          'dbuser' => $DBLogin,
+                          'dbpass' => $DBPassword,
+                          'dbname' => $DBName,
+                          'charset' => 'utf8'
+                          );
+        } else if (file_exists($_SERVER['DOCUMENT_ROOT'].'/configuration.php')){
+          include($_SERVER['DOCUMENT_ROOT'].'/configuration.php');
+          $conf = new JConfig();
+          $result = array('CMS' => 'Joomla',
+                          'dbhost' => $conf->host,
+                          'dbuser' => $conf->user,
+                          'dbpass' => $conf->password,
+                          'dbname' => $conf->db,
+                          'charset' => 'utf8'
+                          );
+        } else if (file_exists($_SERVER['DOCUMENT_ROOT'].'/wp-config.php')){
+          include($_SERVER['DOCUMENT_ROOT'].'/wp-config.php');
+          $result = array('CMS' => 'WordPress',
+                          'dbhost' => DB_HOST,
+                          'dbuser' => DB_USER,
+                          'dbpass' => DB_PASSWORD,
+                          'dbname' => DB_NAME,
+                          'charset' => 'utf8'
+                          );
+        } else if (file_exists($_SERVER['DOCUMENT_ROOT'].'/engine/data/dbconfig.php')){
+          include($_SERVER['DOCUMENT_ROOT'].'/engine/data/dbconfig.php');
+          $result = array('CMS' => 'DLE',
+                          'dbhost' => DBHOST,
+                          'dbuser' => DBUSER,
+                          'dbpass' => DBPASS,
+                          'dbname' => DBNAME,
+                          'charset' => 'utf8'
+                          );
+        } else if (file_exists($_SERVER['DOCUMENT_ROOT'].'/conf.global.php')){
+          include($_SERVER['DOCUMENT_ROOT'].'/conf.global.php');
+          $result = array('CMS' => 'Axioma Master',
+                          'dbhost' => $VARS['db_host'],
+                          'dbuser' => $VARS['db_user'],
+                          'dbpass' => $VARS['db_pass'],
+                          'dbname' => $VARS['db_name'],
+                          'charset' => 'utf8'
+                          );
+        } else if (file_exists($_SERVER['DOCUMENT_ROOT'].'/manager/includes/config.inc.php')){
+          include($_SERVER['DOCUMENT_ROOT'].'/manager/includes/config.inc.php');
+          $result = array('CMS' => 'MODx',
+                          'dbhost' => $database_server,
+                          'dbuser' => $database_user,
+                          'dbpass' => $database_password,
+                          'dbname' => $dbase,
+                          'charset' => $database_connection_charset
+                          );
+        } else if (file_exists($_SERVER['DOCUMENT_ROOT'].'/docs/config.ini')){
+          $ini = parse_ini_file($_SERVER['DOCUMENT_ROOT'].'/docs/config.ini', true);
+          $result = array('CMS' => 'UMI',
+                          'dbhost' => $ini['connections']['core.host'],
+                          'dbuser' => $ini['connections']['core.login'],
+                          'dbpass' => $ini['connections']['core.password'],
+                          'dbname' => $ini['connections']['core.dbname'],
+                          'charset' => 'utf8'
+                          );
+        }
+        return $result;
+      }
+
+
       if ($_GET['archivzip'] == '') {
+      
+            $config = GetCMS();
+            echo '<p>Avtodetect CMS: '.$config['CMS'].'</p>';
             echo '<form action ="zipall.php?archivzip=start" method="post">
                  <P>Mysql<br />
-                 <input type="text" name="dbhost" placeholder="MySQL host" title="MySQL host" value="localhost" style="width: 50%"/><br/>
-                 <input type="text" name="dbname" placeholder="MySQL DB name. If empty dont make MySQL Archive" title="MySQL DB name. If empty dont make MySQL Archive" value=""  style="width: 50%" /><br/>
-                 <input type="text" name="dbuser" placeholder="MySQL User" title="MySQL User" value="" style="width: 50%"/><br/>
-                 <input type="text" name="dbpass" placeholder="MySQL Password" title="MySQL Password" value="" style="width: 50%"/><br/>
-                 <input type="text" name="charset" placeholder="Charset" title="Charset" value="utf8" style="width: 50%"/><br/>
+                 <input type="text" name="dbhost" placeholder="MySQL host" title="MySQL host" value="'.$config['dbhost'].'" style="width: 50%"/><br/>
+                 <input type="text" name="dbname" placeholder="MySQL DB name. If empty dont make MySQL Archive" title="MySQL DB name. If empty dont make MySQL Archive" value="'.$config['dbname'].'"  style="width: 50%" /><br/>
+                 <input type="text" name="dbuser" placeholder="MySQL User" title="MySQL User" value="'.$config['dbuser'].'" style="width: 50%"/><br/>
+                 <input type="text" name="dbpass" placeholder="MySQL Password" title="MySQL Password" value="'.$config['dbpass'].'" style="width: 50%"/><br/>
+                 <input type="text" name="charset" placeholder="Charset" title="Charset" value="'.$config['charset'].'" style="width: 50%"/><br/>
                  </p>
                  <p>Files<br />
                  <input type="checkbox" name="allfiles" value="1" title="Archive all files" checked /> Archive all files</p>
