@@ -6,6 +6,7 @@
 </head>
 <body>
 <?php
+
 /**
  * MySQL and Files archiver
  *
@@ -238,14 +239,26 @@ class MySQLDump
 
 
         function FileListinfile($directory, $outputfile) {
+          $ignore = explode("\n",$_SESSION['ignore']);
+          if (is_array($ignore)){
+            foreach($ignore as $k=>$v) {
+              $ignore[$k] = trim($v);
+            }
+          } else {
+            $ignore = array();
+          }
           if ($handle = opendir($directory)) {
             while (false !== ($file = readdir($handle))) {
               if (is_file($directory.$file)) {
                 if (!(($directory == './') and (substr($file,-4) == '.zip'))) {
-                  file_put_contents($outputfile ,$directory.$file."\n", FILE_APPEND);
+                  if (!in_array($directory.$file, $ignore)) {
+                    file_put_contents($outputfile ,$directory.$file."\n", FILE_APPEND);
+                  }
                 }
               } elseif ($file != '.' and $file != '..' and is_dir($directory.$file)) {
-                FileListinfile($directory.$file.'/', $outputfile);
+                if (!in_array($directory.$file.'/', $ignore)) {
+                  FileListinfile($directory.$file.'/', $outputfile);
+                }
               }
             }
           }
@@ -330,8 +343,11 @@ class MySQLDump
 
 
       if ($_GET['archivzip'] == '') {
-      
             $config = GetCMS();
+            if ($config['CMS'] == 'BITRIX')  {
+              $ignorefiles = './bitrix/cache/'."\n".'./bitrix/backup/';
+            }
+            $_SESSION['config'] = $config;
             echo '<p>Avtodetect CMS: '.$config['CMS'].'</p>';
             echo '<form action ="zipall.php?archivzip=start" method="post">
                  <P>Mysql<br />
@@ -342,11 +358,16 @@ class MySQLDump
                  <input type="text" name="charset" placeholder="Charset" title="Charset" value="'.$config['charset'].'" style="width: 50%"/><br/>
                  </p>
                  <p>Files<br />
-                 <input type="checkbox" name="allfiles" value="1" title="Archive all files" checked /> Archive all files</p>
+                 <input type="checkbox" name="allfiles" value="1" title="Archive files" checked /> Archive files</p>
+                 <p>Ignore files / folders<br/>
+                 <textarea name="ignore" placeholder="Ignore files" style="width:50%; min-height: 150px;">'.$ignorefiles.'</textarea>
+                 </p>
                  <p><input type="submit" value="START" /></p>
                  </form>';
       } else if ($_GET['archivzip'] == 'start') {
-          $filenamezip='site_'.date('Y-m-d-H-i-s').".zip";
+                
+          $filenamezip = 'site_'.date('Y-m-d-H-i-s')."_001.zip";
+          $_SESSION['ignore'] = $_REQUEST['ignore'];
           if ($_REQUEST['dbname'] != '')  {
               $filenamesql=$_REQUEST['dbname'].'_'.date('Y-m-d-H-i-s').".sql.gz";
               $mysqli = new mysqli($_REQUEST['dbhost'], $_REQUEST['dbuser'], $_REQUEST['dbpass'], $_REQUEST['dbname']);
@@ -392,7 +413,16 @@ class MySQLDump
                 $cursize = 0;
                 $stop = false;
                 if (filesize($filenamezip) > 100 * 1024 * 1024) {
-                  $filenamezip = str_replace('.zip', '_.zip', $filenamezip);
+                  $filenum = substr(strrchr($filenamezip, '_'),1);
+                  $filenum = str_replace('.zip', '',  $filenum);
+                  $newfilenum = $filenum + 1;
+                  while (strlen($filenum) < 3) {
+                    $filenum = '0'.$filenum;
+                  }
+                  while (strlen($newfilenum) < 3) {
+                    $newfilenum = '0'.$newfilenum;
+                  }
+                  $filenamezip = str_replace( $filenum.'.zip', $newfilenum.'.zip', $filenamezip);
                 }
                 $zip->open($filenamezip, ZipArchive::CREATE);
                 while (!$stop) {
@@ -414,7 +444,7 @@ class MySQLDump
                 echo '<div style="width: 100%; background: #ddd; min-height: 70px; position: relative;">';
                 echo '<div style="width: '.($n / count($files) * 100).'%; height: 100%; background: #f55; position: absolute; top: 0px; left: 0px;">';
                 echo '</div>';
-                echo '<div style="width: 100%; height: 100%; background: none; position: absolute; top: 0px; left: 0px;">';
+                echo '<div style="width: 100%; height: 100%; background: none; position: absolute; top: 0px; left: 0px; padding: 20px;">';
                 echo  'Current session worktime '.$runtime.'sec. Archived '.$curfiles.' files. Last file is '.$n.'/'.count($files).' '.$files[$n - 1].'';
                 echo '</div>';
                 echo '</div>';
@@ -445,9 +475,7 @@ class MySQLDump
                    echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
                   }
                 }
-                
       }
-
 ?>
 </body>
 </html>
