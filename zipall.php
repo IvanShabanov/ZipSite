@@ -293,7 +293,14 @@ class MySQLDump
                           'charset' => 'utf8'
                           );
         } else if (file_exists($_SERVER['DOCUMENT_ROOT'].'/wp-config.php')){
-          include($_SERVER['DOCUMENT_ROOT'].'/wp-config.php');
+          /* include($_SERVER['DOCUMENT_ROOT'].'/wp-config.php'); */
+          $content = file_get_contents($_SERVER['DOCUMENT_ROOT'].'/wp-config.php');
+          $content = str_replace('<?', '//<?', $content);
+          $content = str_replace('?>', '//?>', $content);
+
+          $content = str_replace('require', '//require', $content);
+
+          eval ($content);
           $result = array('CMS' => 'WordPress',
                           'dbhost' => DB_HOST,
                           'dbuser' => DB_USER,
