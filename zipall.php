@@ -477,9 +477,21 @@ class MySQLDump
                   @unlink (__FILE__);                  
                   
                   echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
-                  while (strpos($filenamezip , '_.zip') > 0) {
-                   $filenamezip = str_replace('_.zip','.zip', $filenamezip);
-                   echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
+                  $filenum = substr(strrchr($filenamezip, '_'),1);
+                  $filenum = str_replace('.zip', '',  $filenum);                  
+                  while ($filenum > 1) {
+                    $newfilenum = $filenum - 1;
+                    while (strlen($filenum) < 3) {
+                      $filenum = '0'.$filenum;
+                    }
+                    while (strlen($newfilenum) < 3) {
+                      $newfilenum = '0'.$newfilenum;
+                    }
+                    $filenamezip = str_replace( $filenum.'.zip', $newfilenum.'.zip', $filenamezip);
+                    
+                    $filenum = substr(strrchr($filenamezip, '_'),1);
+                    $filenum = str_replace('.zip', '',  $filenum);
+                    echo '<p><a href="'.$filenamezip.'">'.$filenamezip.'</a></p>';
                   }
                 }
       }
