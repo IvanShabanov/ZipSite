@@ -353,6 +353,8 @@ class MySQLDump
             $config = GetCMS();
             if ($config['CMS'] == 'BITRIX')  {
               $ignorefiles = './bitrix/cache/'."\n".'./bitrix/backup/';
+              $ignorefiles .= "\n".'/bitrix/cache/'."\n".'/bitrix/backup/';
+
             }
             $_SESSION['config'] = $config;
             echo '<p>Avtodetect CMS: '.$config['CMS'].'</p>';
